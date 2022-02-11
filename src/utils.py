@@ -113,11 +113,6 @@ class Aggregator(nn.Module):
         outputs = self._call(self_vectors, entity_vectors)
         return outputs
 
-    # @abstractmethod
-    # def _call(self, self_vectors, entity_vectors):
-    #     # self_vectors: [batch_size, -1, input_dim]
-    #     # entity_vectors: [batch_size, -1, 2, input_dim]
-    #     pass
 
 class ConcatAggregator(Aggregator):
     def __init__(self, batch_size, input_dim, output_dim, act=lambda x: x, self_included=True):
@@ -141,6 +136,7 @@ class ConcatAggregator(Aggregator):
 
         return self.act(output)
 
+
 def evaluate(entity_pairs, labels, args, model):
     acc_list = []
     scores_list = []
@@ -155,6 +151,9 @@ def evaluate(entity_pairs, labels, args, model):
 
     return float(np.mean(acc_list)), np.array(scores_list)
 
+
+def float1(x):
+    return round(0.5*float(x), 4)
 
 def calculate_ranking_metrics(triplets, scores, true_relations):
     for i in range(scores.shape[0]):
