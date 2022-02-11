@@ -5,10 +5,10 @@ import math
 import torch.nn.functional as F
 
 def get_positive_expectation(p_samples, measure, average=True):
-    """Computes the positive part of a divergence / difference.
+    """rank_computes the positive part of a divergence / difference.
     Args:
         p_samples: Positive samples.
-        measure: Measure to compute for.
+        measure: Measure to rank_compute for.
         average: Average the result over samples.
     Returns:
         torch.Tensor
@@ -41,10 +41,10 @@ def get_positive_expectation(p_samples, measure, average=True):
 
 
 def get_negative_expectation(q_samples, measure, average=True):
-    """Computes the negative part of a divergence / difference.
+    """rank_computes the negative part of a divergence / difference.
     Args:
         q_samples: Negative samples.
-        measure: Measure to compute for.
+        measure: Measure to rank_compute for.
         average: Average the result over samples.
     Returns:
         torch.Tensor
@@ -152,8 +152,9 @@ def evaluate(entity_pairs, labels, args, model):
     return float(np.mean(acc_list)), np.array(scores_list)
 
 
-def float1(x):
-    return round(0.5*float(x), 4)
+def rank_compute(x):
+    return round(float(0.5*np.mean(x)), 4)
+
 
 def calculate_ranking_metrics(triplets, scores, true_relations):
     for i in range(scores.shape[0]):
@@ -167,10 +168,10 @@ def calculate_ranking_metrics(triplets, scores, true_relations):
     zero_coordinates = np.argwhere(sorted_indices == 0)
     rankings = zero_coordinates[:, 1] + 1
 
-    mrr = float(np.mean(1 / rankings))
-    hit1 = float(np.mean(rankings <= 1))
-    hit3 = float(np.mean(rankings <= 3))
-    hit10 = float(np.mean(rankings <= 10))
+    mrr = rank_compute(1 / rankings)
+    hit1 = rank_compute(rankings <= 1)
+    hit3 = rank_compute(rankings <= 3)
+    hit10 = rank_compute(rankings <= 10)
     return mrr, hit1, hit3, hit10
 
 
