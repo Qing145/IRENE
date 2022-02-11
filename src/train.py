@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from collections import defaultdict
 from model import IRENE
+from utils import *
 
 
 args = None
@@ -46,7 +47,7 @@ def train(model_args, data):
 
     # prepare for top-k evaluation
     true_relations = defaultdict(set)
-    for head, tail, relation in train_triplets + valid_triplets + test_triplets:
+    for head, tail, relation in test_triplets:
         true_relations[(head, tail)].add(relation)
     best_valid_acc = 0.0
     final_res = None  # acc, mrr, mr, hit1, hit3, hit10
@@ -73,9 +74,9 @@ def train(model_args, data):
 
         # evaluation
         print('epoch %2d   ' % step, end='')
-        train_acc, _ = evaluate(train_entity_pairs, train_labels)
-        valid_acc, _ = evaluate(valid_entity_pairs, valid_labels)
-        test_acc, test_scores = evaluate(test_entity_pairs, test_labels)
+        train_acc, _ = evaluate(train_entity_pairs, train_labels, args, model)
+        valid_acc, _ = evaluate(valid_entity_pairs, valid_labels, args, model)
+        test_acc, test_scores = evaluate(test_entity_pairs, test_labels, args, model)
 
         # show evaluation result for current epoch
         current_res = 'acc: %.4f' % test_acc
@@ -94,51 +95,5 @@ def train(model_args, data):
     print('final results\n%s' % final_res)
 
 
-def get_feed_dict(entity_pairs, train_edges, labels, start, end):
-    feed_dict = {}
-    feed_dict["entity_pairs"] = entity_pairs[start:end]
-    if train_edges is not None:
-        feed_dict["train_edges"] = train_edges[start:end]
-    else:
-        # for evaluation no edges should be masked out
-        feed_dict["train_edges"] = torch.LongTensor(np.array([-1] * (end - start), np.int32)).cuda() if args.cuda \
-            else torch.LongTensor(np.array([-1] * (end - start), np.int32))
-
-    feed_dict["labels"] = labels[start:end]
-
-    return feed_dict
 
 
-def evaluate(entity_pairs, labels):
-    acc_list = []
-    scores_list = []
-
-    s = 0
-    while s + args.batch_size <= len(labels):
-        acc, scores = model.test_step(model, get_feed_dict(
-            entity_pairs, None, labels, s, s + args.batch_size))
-        acc_list.extend(acc)
-        scores_list.extend(scores)
-        s += args.batch_size
-
-    return float(np.mean(acc_list)), np.array(scores_list)
-
-
-def calculate_ranking_metrics(triplets, scores, true_relations):
-    for i in range(scores.shape[0]):
-        head, tail, relation = triplets[i]
-        for j in true_relations[head, tail] - {relation}:
-            scores[i, j] -= 1.0
-
-    sorted_indices = np.argsort(-scores, axis=1)
-    relations = np.array(triplets)[0:scores.shape[0], 2]
-    sorted_indices -= np.expand_dims(relations, 1)
-    zero_coordinates = np.argwhere(sorted_indices == 0)
-    rankings = zero_coordinates[:, 1] + 1
-
-    mrr = float(np.mean(1 / rankings))
-    hit1 = float(np.mean(rankings <= 1))
-    hit3 = float(np.mean(rankings <= 3))
-    hit10 = float(np.mean(rankings <= 10))
-
-    return mrr, hit1, hit3, hit10

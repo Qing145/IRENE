@@ -1,6 +1,8 @@
 import numpy as np
 import torch.nn as nn
 import torch
+import math
+import torch.nn.functional as F
 
 def get_positive_expectation(p_samples, measure, average=True):
     """Computes the positive part of a divergence / difference.
@@ -138,3 +140,51 @@ class ConcatAggregator(Aggregator):
         output = output.view([self.batch_size, -1, self.output_dim])  # [batch_size, -1, output_dim]
 
         return self.act(output)
+
+def evaluate(entity_pairs, labels, args, model):
+    acc_list = []
+    scores_list = []
+
+    s = 0
+    while s + args.batch_size <= len(labels):
+        acc, scores = model.test_step(model, get_feed_dict(
+            entity_pairs, None, labels, s, s + args.batch_size))
+        acc_list.extend(acc)
+        scores_list.extend(scores)
+        s += args.batch_size
+
+    return float(np.mean(acc_list)), np.array(scores_list)
+
+
+def calculate_ranking_metrics(triplets, scores, true_relations):
+    for i in range(scores.shape[0]):
+        head, tail, relation = triplets[i]
+        for j in true_relations[head, tail] - {relation}:
+            scores[i, j] -= 1.0
+
+    sorted_indices = np.argsort(-scores, axis=1)
+    relations = np.array(triplets)[0:scores.shape[0], 2]
+    sorted_indices -= np.expand_dims(relations, 1)
+    zero_coordinates = np.argwhere(sorted_indices == 0)
+    rankings = zero_coordinates[:, 1] + 1
+
+    mrr = float(np.mean(1 / rankings))
+    hit1 = float(np.mean(rankings <= 1))
+    hit3 = float(np.mean(rankings <= 3))
+    hit10 = float(np.mean(rankings <= 10))
+    return mrr, hit1, hit3, hit10
+
+
+def get_feed_dict(entity_pairs, train_edges, labels, start, end):
+    feed_dict = {}
+    feed_dict["entity_pairs"] = entity_pairs[start:end]
+    if train_edges is not None:
+        feed_dict["train_edges"] = train_edges[start:end]
+    else:
+        # for evaluation no edges should be masked out
+        feed_dict["train_edges"] = torch.LongTensor(np.array([-1] * (end - start), np.int32)).cuda() if args.cuda \
+            else torch.LongTensor(np.array([-1] * (end - start), np.int32))
+
+    feed_dict["labels"] = labels[start:end]
+
+    return feed_dict
